@@ -160,5 +160,4 @@ cython_debug/
 .idea/
 
 # Data
-data/*.json
-data/unlabelled
+data/
