@@ -127,7 +127,10 @@ class JointDataset(Dataset):
         x = self._unscale(x)
         return x
 
-def make_joint_dataset(device: torch.device):
+
+def make_joint_dataset(
+        device: torch.device,
+        n_frame_to_remove):
     with open("data/unlabelled/camera/joints/front_sit_stand.csv") as f:
         data = pd.read_csv(f, header=0)
         data = data.rename(columns={"x-axis": "x", "y-axis": "y", "z-axis": "z", "joint_names": "joint_name"})
@@ -145,6 +148,11 @@ def make_joint_dataset(device: torch.device):
 
     # Convert the DataFrame to a NumPy array and reshape it
     x = data[['x', 'y', 'z']].values.reshape((frame_ids.size, joint_names.size, 3))
+
+    print(x.shape)
+
+    # Remove the first X frames and the last X frames
+    x = x[500:-500]
 
     # Convert the NumPy array to a PyTorch tensor
     x = torch.from_numpy(x).float().to(device)

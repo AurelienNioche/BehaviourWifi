@@ -15,23 +15,23 @@ class VAE(nn.Module):
         super().__init__()
         # Encoder ---------------------
         self.enc = nn.Sequential(
-            nn.Linear(input_dim, 2**6),
+            nn.Linear(input_dim, 2**8),
             nn.ReLU(),
-            nn.Linear(2**6, 2**5),
+            nn.Linear(2**8, 2**7),
             nn.ReLU(),
-            nn.Linear(2**5, 2**4),
+            nn.Linear(2**7, 2**6),
             nn.ReLU())
-        self.mu = nn.Linear(2**4, 2**3)
-        self.logvar = nn.Linear(2**4, 2**3)
+        self.mu = nn.Linear(2**6, 2**6)
+        self.logvar = nn.Linear(2**6, 2**6)
         # Decoder ---------------------
         self.dec = nn.Sequential(
-            nn.Linear(2**3, 2**4),
+            nn.Linear(2**6, 2**7),
             nn.ReLU(),
-            nn.Linear(2**4, 2**5),
+            nn.Linear(2**7, 2**8),
+            # nn.ReLU(),
+            # nn.Linear(2**8, 2**8),
             nn.ReLU(),
-            nn.Linear(2**5, 2**6),
-            nn.ReLU(),
-            nn.Linear(2**6, input_dim))
+            nn.Linear(2**8, input_dim))
 
     def encode(self, x):
         x = self.enc(x)
@@ -75,7 +75,8 @@ class VAE(nn.Module):
         return x_rec
 
     @classmethod
-    def train_routine(cls,
+    def train_routine(
+            cls,
             train_dataset,
             device=torch.device("cpu"),
             seed=123,
@@ -87,9 +88,10 @@ class VAE(nn.Module):
         torch.manual_seed(seed)
 
         input_dim = torch.prod(torch.tensor(train_dataset.x[0].size())).item()
+        print("input_dim", input_dim)
         vae = VAE(input_dim=input_dim).to(device)
 
-        train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size)
+        train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
 
         optimizer_vae = optim.Adam(vae.parameters(), lr=lr)
 
