@@ -1,4 +1,5 @@
 import torch
+import hashlib
 
 
 def find_device(force_cpu):
@@ -15,8 +16,6 @@ def find_device(force_cpu):
 
     return device
 
-
-import hashlib
 
 def path_to_alphanumeric(path):
     # Create a new sha256 hash object

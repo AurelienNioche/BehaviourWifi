@@ -1,10 +1,13 @@
-import numpy as np
+import os.path
+
 import torch
-from pytorch3d.transforms import quaternion_apply, axis_angle_to_quaternion
-
 from torch.utils.data import Dataset
-
+from pytorch3d.transforms import quaternion_apply, axis_angle_to_quaternion
+import numpy as np
 import pandas as pd
+import glob
+
+from utils.utils import path_to_alphanumeric
 
 
 class JointDataset(Dataset):
@@ -128,36 +131,96 @@ class JointDataset(Dataset):
         return x
 
 
-def make_joint_dataset(
-        device: torch.device,
-        n_frame_to_remove):
-    with open("data/unlabelled/camera/joints/front_sit_stand.csv") as f:
-        data = pd.read_csv(f, header=0)
-        data = data.rename(columns={"x-axis": "x", "y-axis": "y", "z-axis": "z", "joint_names": "joint_name"})
-        # print(data.head())
+def make_joint_dataset(device: torch.device, data_folder: str, bkp_folder: str = "data/bkp"):
 
-    # Get the unique joint names and frame IDs
-    joint_names = np.sort(data["joint_name"].unique())
-    frame_ids = data["frame_id"].unique()
+    os.makedirs(bkp_folder, exist_ok=True)
 
-    # Create a multi-index using 'frame_id' and 'joint_names'
-    data.set_index(['frame_id', 'joint_name'], inplace=True)
+    bkp_name = path_to_alphanumeric(data_folder)
 
-    # Sort the index to ensure the data is in the correct order
-    data.sort_index(inplace=True)
+    bkp_file = f"{bkp_folder}/{bkp_name}.pt"
 
-    # Convert the DataFrame to a NumPy array and reshape it
-    x = data[['x', 'y', 'z']].values.reshape((frame_ids.size, joint_names.size, 3))
+    if os.path.exists(bkp_file):
+        return torch.load(bkp_file)
 
-    print(x.shape)
+    files = []
+    runs = glob.glob(f"{data_folder}/run_*")
+    for r in runs:
+        labels = glob.glob(f"{r}/processed/labelled/camera/joints/sit_stand/front/*")
+        for lb in labels:
+            files += glob.glob(f"{lb}/*")
 
-    # Remove the first X frames and the last X frames
-    x = x[500:-500]
+    print("number of files:", len(files))
+    joint_names = None
+    xs = []
+    for f in files:
+        # "data/unlabelled/camera/joints/front_sit_stand.csv"
+        with open(f, 'r') as f_:
+            df = pd.read_csv(
+                f_, names=["frame_id", "timestamp", "joint_name", "x", "y", "z"])
+            if not len(df):
+                continue
+
+        # Get the unique joint names and frame IDs
+        joint_names = np.sort(df["joint_name"].unique())
+        frame_ids = df["frame_id"].unique()
+
+        n_joint = len(joint_names)
+
+        for f_id in frame_ids:
+            if len(df[df.frame_id == f_id]) != n_joint:
+                df = df[df.frame_id != f_id]
+                frame_ids = frame_ids[frame_ids != f_id]
+
+        # Create a multi-index using 'frame_id' and 'joint_names'
+        df.set_index(['frame_id', 'joint_name'], inplace=True)
+
+        # Sort the index to ensure the data is in the correct order
+        df.sort_index(inplace=True)
+
+        # Convert the DataFrame to a NumPy array and reshape it
+        x = df[['x', 'y', 'z']].values.reshape((frame_ids.size, joint_names.size, 3))
+
+        # Add to the list
+        xs.append(x)
+
+    # Concatenate the list of NumPy arrays
+    x = np.concatenate(xs)
 
     # Convert the NumPy array to a PyTorch tensor
     x = torch.from_numpy(x).float().to(device)
 
-    # print("initial shape", x.size())
-
+    # Create the dataset
     dataset = JointDataset(joint_names=joint_names, x=x)
-    return dataset
+    torch.save(dataset, bkp_file)
+
+
+# def make_joint_dataset(device: torch.device):
+#
+#     with open("data/unlabelled/camera/joints/front_sit_stand.csv") as f:
+#         data = pd.read_csv(f, header=0)
+#         data = data.rename(columns={"x-axis": "x", "y-axis": "y", "z-axis": "z", "joint_names": "joint_name"})
+#         # print(data.head())
+#
+#     # Get the unique joint names and frame IDs
+#     joint_names = np.sort(data["joint_name"].unique())
+#     frame_ids = data["frame_id"].unique()
+#
+#     # Create a multi-index using 'frame_id' and 'joint_names'
+#     data.set_index(['frame_id', 'joint_name'], inplace=True)
+#
+#     # Sort the index to ensure the data is in the correct order
+#     data.sort_index(inplace=True)
+#
+#     # Convert the DataFrame to a NumPy array and reshape it
+#     x = data[['x', 'y', 'z']].values.reshape((frame_ids.size, joint_names.size, 3))
+#
+#     # Remove the first X frames and the last X frames
+#     x = x[500:-500]
+#
+#     # Convert the NumPy array to a PyTorch tensor
+#     x = torch.from_numpy(x).float().to(device)
+#
+#     # print("initial shape", x.size())
+#
+#     dataset = JointDataset(joint_names=joint_names, x=x)
+#     return dataset
